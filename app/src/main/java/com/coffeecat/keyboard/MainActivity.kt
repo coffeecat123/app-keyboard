@@ -28,8 +28,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
 import com.coffeecat.keyboard.data.SettingsManager
 import com.coffeecat.keyboard.view.KeyboardView
 
@@ -49,7 +51,22 @@ class MainActivity : ComponentActivity() {
                 darkTheme -> darkColorScheme()
                 else -> lightColorScheme()
             }
+            val view = LocalView.current
+            if (!view.isInEditMode) {
+                SideEffect {
+                    val window = (view.context as ComponentActivity).window
+                    // 設定狀態欄顏色為主題的背景色或 surface
+                    window.statusBarColor = colorScheme.surface.toArgb()
 
+                    // 設定導覽列顏色 (選配)
+                    window.navigationBarColor = colorScheme.surface.toArgb()
+
+                    // 控制狀態欄圖示顏色 (深色模式時使用淺色圖示，反之亦然)
+                    WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+                    // 控制導覽列圖示顏色
+                    WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !darkTheme
+                }
+            }
             MaterialTheme(colorScheme = colorScheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -62,7 +79,7 @@ class MainActivity : ComponentActivity() {
                                 .padding(horizontal = 20.dp)
                                 .verticalScroll(scrollState)
                         ) {
-                            Text("CoffeeCat Settings", style = MaterialTheme.typography.headlineMedium)
+                            Text("Keyboard Settings", style = MaterialTheme.typography.headlineMedium)
                             Spacer(modifier = Modifier.height(20.dp))
 
                             // --- 步驟區 ---
