@@ -50,7 +50,7 @@ class CoffeeCatIME : InputMethodService() {
     private var composingText = StringBuilder()
     private var isPredictionEnabled = true // 預設開啟單字預測
     private val englishEngine = EnglishEngine(maxCandidatesPerNode = 10)
-    private val bopomofoEngine = BopomofoEngine()
+    private lateinit var bopomofoEngine: BopomofoEngine
     private lateinit var bopomofoProvider: BopomofoProvider
     private lateinit var suggestionBar: HorizontalScrollView
     private lateinit var suggestionContainer: LinearLayout
@@ -74,11 +74,12 @@ class CoffeeCatIME : InputMethodService() {
 
         // 初始化 Engine
         englishProvider = EnglishProvider(englishEngine)
+
+        bopomofoEngine = BopomofoEngine(this)
         bopomofoProvider = BopomofoProvider(bopomofoEngine)
 
         Thread {
             loadEnglishDictionary()
-            loadBopomofoDictionary()
         }.start()
     }
 
@@ -144,7 +145,7 @@ class CoffeeCatIME : InputMethodService() {
                 setOnClickListener {
                     val ic = currentInputConnection
                     ic.setComposingText("",1)
-                    if (ic != null) clearComposingText(ic)
+                    clearComposingText(ic)
                 }
             }
 
@@ -245,38 +246,51 @@ class CoffeeCatIME : InputMethodService() {
         suggestionBar.scrollTo(0, 0)
         suggestionContainer.removeAllViews()
 
-        if (suggestions.isEmpty()&&composingText.isEmpty()) {
-            suggestionArea.visibility = View.GONE // 改為控制容器
-            keyboardView.isToolbarHidden = false // 顯示 Canvas Toolbar
+        if (suggestions.isEmpty() && composingText.isEmpty()) {
+            suggestionArea.visibility = View.GONE
+            keyboardView.isToolbarHidden = false
             return
         }
 
         suggestionArea.visibility = View.VISIBLE
-        keyboardView.isToolbarHidden = true // 隱藏 Canvas Toolbar
-        (clearButton as? android.widget.ImageView)?.apply {
-            setColorFilter(keyboardView.cachedTextColor)
-        }
-        suggestions.forEach { word ->
+        keyboardView.isToolbarHidden = true
+        (clearButton as? android.widget.ImageView)?.setColorFilter(keyboardView.cachedTextColor)
+
+        suggestions.forEach { entry ->
+            // 解析 "中文|剩餘注音"
+            val parts = entry.split("|")
+            val displayWord = parts[0]
+            val remainingBopomofo = if (parts.size > 1) parts[1] else ""
+
             val tv = TextView(this).apply {
-                text = word
+                text = displayWord // 只顯示中文
                 textSize = 22f
-                setTextColor(keyboardView.cachedTextColor) // 根據主題調整
+                setTextColor(keyboardView.cachedTextColor)
                 gravity = Gravity.CENTER
                 setPadding(dpToPx(16), 0, dpToPx(16), 0)
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT)
 
-                // 點擊建議詞
                 setOnClickListener {
                     val ic = currentInputConnection ?: return@setOnClickListener
-                    val addSpace= keyboardView.currentMode==KeyboardMode.ALPHABET
-                    val finalWord=if(addSpace) "$word " else word
-                    ic.commitText(finalWord, 1)
-                    composingText.setLength(0)
-                    setSuggestions(emptyList()) // 清空建議欄
 
-                    if (keyboardView.shiftState == ShiftState.SHIFTED) {
-                        keyboardView.shiftState = ShiftState.UNSHIFTED
-                        keyboardView.notifyShiftChanged()
+                    if (remainingBopomofo.isNotEmpty()) {
+                        // --- 【分段選詞】 ---
+                        // 1. 上字選中的詞
+                        ic.commitText(displayWord, 1)
+
+                        // 2. 更新 Composing 區域為剩下的「原始注音」
+                        composingText.setLength(0)
+                        composingText.append(remainingBopomofo)
+                        ic.setComposingText(composingText, 1)
+
+                        // 3. 觸發新注音的建議詞搜尋
+                        updateSuggestionsWithRaw()
+                    } else {
+                        // --- 【整句選詞】 ---
+                        val addSpace = keyboardView.currentMode == KeyboardMode.ALPHABET
+                        ic.commitText(if (addSpace) "$displayWord " else displayWord, 1)
+                        composingText.setLength(0)
+                        setSuggestions(emptyList())
                     }
                 }
             }
@@ -357,37 +371,6 @@ class CoffeeCatIME : InputMethodService() {
             Log.e("CoffeeCatIME", "讀取字典失敗: ${e.message}")
         }
     }
-    private fun loadBopomofoDictionary() {
-        try {
-            assets.open("final_ime_dict.txt").bufferedReader(Charsets.UTF_8).use { reader ->
-                reader.lineSequence().forEach { line ->
-                    // 跳過標題列或空行
-                    if (line.isBlank() || line.startsWith("word")) return@forEach
-
-                    val parts = line.split("\t")
-                    if (parts.size >= 5) {
-                        val word = parts[0]
-                        val key = parts[1]      // ㄍㄨㄛ
-                        val tones = parts[2]    // 2
-
-                        // 自動計算 initials (首字母):
-                        // 如果 key 是 "ㄍㄨㄛ,ㄇㄧㄣˊ"，會取出 "ㄍㄇ"
-                        val initials = key.split(",").joinToString("") { syllable ->
-                            if (syllable.isNotEmpty()) syllable.take(1) else ""
-                        }
-
-                        val length = parts[3].toIntOrNull() ?: word.length
-                        val weight = parts[4].toDoubleOrNull() ?: 0.0
-
-                        bopomofoEngine.insertDetailed(word, key, tones, initials, length, weight)
-                    }
-                }
-            }
-            Log.d("CoffeeCatIME", "注音字典載入完成")
-        } catch (e: Exception) {
-            Log.e("CoffeeCatIME", "字典載入出錯: ${e.message}")
-        }
-    }
     private fun dpToPx(dp: Int): Int =
         (dp * resources.displayMetrics.density).toInt()
     private fun handleKeyAction(action: KeyAction) {
@@ -406,9 +389,20 @@ class CoffeeCatIME : InputMethodService() {
                 KeyType.SIGN ->{}
                 KeyType.SPACER -> {}
                 KeyType.TEXT -> {
+                    val textBefore = ic.getTextBeforeCursor(10, 0)
+                    if (textBefore.isNullOrEmpty() && composingText.isNotEmpty()) {
+                        // 發現輸入框空了，但內部卻還有注音，強制重設
+                        clearComposingText(ic)
+                    }
                     val isAlphabetMode = keyboardView.currentMode != KeyboardMode.SYMBOLS &&
                             keyboardView.currentMode != KeyboardMode.NUMERIC
-                    if (isPredictionEnabled && isAlphabetMode) {
+                    val isPunctuation = action.text.any { it in ",.，。" }
+                    if (isPunctuation) {
+                        // 1. 先把還在組合中的注音或英文上字
+                        clearComposingText(ic)
+                        // 2. 直接提交標點符號，不進 composing 區域
+                        ic.commitText(action.text, 1)
+                    } else if (isPredictionEnabled && isAlphabetMode) {
                         composingText.append(action.text)
                         ic.setComposingText(composingText, 1)
 
@@ -737,6 +731,12 @@ class CoffeeCatIME : InputMethodService() {
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        val ic = currentInputConnection
+        if (ic != null) {
+            // 1. 確保呼叫你已經寫好的清除函式
+            // 這會執行 ic.finishComposingText(), composingText.setLength(0), 並隱藏建議欄
+            clearComposingText(ic)
+        }
         keyboardView.setMode(keyboardView.baseLanguageMode)
         isSelectionModeActive = false
         keyboardView.setSelectionMode(false)
