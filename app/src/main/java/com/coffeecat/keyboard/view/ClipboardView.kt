@@ -295,6 +295,7 @@ class ClipboardView(context: Context) : LinearLayout(context) {
         return context.getDrawable(typedValue.resourceId)
     }
     fun scrollToTop() {
+        refreshClipboardData()
         clipHistory.forEach { it.isExpanded = false }
 
         // 2. 通知 Adapter 資料已更改，這樣 UI 才會刷回折疊狀態

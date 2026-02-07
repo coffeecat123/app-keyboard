@@ -23,7 +23,10 @@ import com.coffeecat.keyboard.data.SettingsManager
 import java.io.File
 
 @SuppressLint("ClickableViewAccessibility", "SetTextI18n")
-class BookmarkView(context: Context) : LinearLayout(context) {
+class BookmarkView(
+    context: Context,
+    private val bookmarkManager: BookmarkManager
+) : LinearLayout(context) {
     private val settings = SettingsManager(context)
 
     // 定義顏色變數以便後續使用
@@ -31,7 +34,6 @@ class BookmarkView(context: Context) : LinearLayout(context) {
     private val textColor = settings.textColor
     private val toolbarColor = settings.toolbarColor
     private val userTypeface = settings.getTypeface()
-    private val bookmarkManager = BookmarkManager(context)
 
     var toastMessage: ((String) -> Unit)? = null
     var onBookmarkSelected: ((String) -> Unit)? = null
@@ -205,6 +207,7 @@ class BookmarkView(context: Context) : LinearLayout(context) {
         return context.getDrawable(typedValue.resourceId)
     }
     fun scrollToTop() {
+        refreshBookmarkData()
         recyclerView.scrollToPosition(0)
     }
     fun updateTargetHeight(heightPx: Int) {

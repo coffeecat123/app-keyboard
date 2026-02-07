@@ -193,11 +193,12 @@ class CoffeeCatIME : InputMethodService() {
             }
             onAddBookmark = { text ->
                 bookmarkManager.addBookmark(text)
+                bookmarkView.refreshBookmarkData()
                 toastMessage("Added to bookmarks")
             }
             toastMessage = { message -> toastMessage(message) }
         }
-        bookmarkView = BookmarkView(this).apply {
+        bookmarkView = BookmarkView(this,bookmarkManager).apply {
             visibility = View.GONE
             // 這裡一定要 MATCH_PARENT 才能實現全螢幕滑動
             layoutParams = FrameLayout.LayoutParams(
@@ -697,12 +698,10 @@ class CoffeeCatIME : InputMethodService() {
             KeyboardMode.CLIPBOARD -> {
                 clipboardView.visibility = View.VISIBLE
                 clipboardView.scrollToTop()
-                clipboardView.refreshClipboardData()
             }
             KeyboardMode.BOOKMARK -> {
                 bookmarkView.visibility = View.VISIBLE
                 bookmarkView.scrollToTop()
-                bookmarkView.refreshBookmarkData()
             }
             else -> {}
         }
