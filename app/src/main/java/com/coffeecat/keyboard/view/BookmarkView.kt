@@ -25,9 +25,9 @@ import java.io.File
 @SuppressLint("ClickableViewAccessibility", "SetTextI18n")
 class BookmarkView(
     context: Context,
-    private val bookmarkManager: BookmarkManager
+    private val bookmarkManager: BookmarkManager,
+    settings: SettingsManager
 ) : LinearLayout(context) {
-    private val settings = SettingsManager(context)
 
     // 定義顏色變數以便後續使用
     private val bgColor = settings.backgroundColor

@@ -22,9 +22,10 @@ import com.coffeecat.keyboard.data.SettingsManager
 import java.io.File
 
 @SuppressLint("SetTextI18n", "ClickableViewAccessibility")
-class EmojiPickerView(context: Context) : LinearLayout(context) {
-    private val settings = SettingsManager(context)
-
+class EmojiPickerView(
+    context: Context,
+    private val settings: SettingsManager
+) : LinearLayout(context) {
     // 定義顏色變數以便後續使用
     private val bgColor = settings.backgroundColor
     private val textColor = settings.textColor
@@ -425,7 +426,7 @@ class EmojiPickerView(context: Context) : LinearLayout(context) {
 
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
-    private inner class EmojiAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+    private inner class EmojiAdapter() : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
         override fun getItemViewType(position: Int): Int {
             return when (flatList[position]) {

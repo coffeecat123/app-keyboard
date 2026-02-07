@@ -72,9 +72,9 @@ class CoffeeCatIME : InputMethodService() {
     override fun onCreate() {
         setTheme(com.google.android.material.R.style.Theme_Material3_DayNight_NoActionBar)
         bookmarkManager = BookmarkManager(this)
+        settingsManager = SettingsManager(this)
         super.onCreate()
 
-        settingsManager = SettingsManager(this)
         // 初始化 Engine
         englishProvider = EnglishProvider(englishEngine)
 
@@ -159,7 +159,10 @@ class CoffeeCatIME : InputMethodService() {
             addView(suggestionArea) // 加入容器而非原本的 suggestionBar
         }
 
-        emojiPickerView = EmojiPickerView(this).apply {
+        emojiPickerView = EmojiPickerView(
+            this,
+            settingsManager
+        ).apply {
             visibility = View.GONE
             // 這裡一定要 MATCH_PARENT 才能實現全螢幕滑動
             layoutParams = FrameLayout.LayoutParams(
@@ -174,7 +177,10 @@ class CoffeeCatIME : InputMethodService() {
             }
         }
 
-        clipboardView = ClipboardView(this).apply {
+        clipboardView = ClipboardView(
+            this,
+            settingsManager
+        ).apply {
             visibility = View.GONE
             // 這裡一定要 MATCH_PARENT 才能實現全螢幕滑動
             layoutParams = FrameLayout.LayoutParams(
@@ -198,7 +204,11 @@ class CoffeeCatIME : InputMethodService() {
             }
             toastMessage = { message -> toastMessage(message) }
         }
-        bookmarkView = BookmarkView(this,bookmarkManager).apply {
+        bookmarkView = BookmarkView(
+            this,
+            bookmarkManager,
+            settingsManager
+        ).apply {
             visibility = View.GONE
             // 這裡一定要 MATCH_PARENT 才能實現全螢幕滑動
             layoutParams = FrameLayout.LayoutParams(

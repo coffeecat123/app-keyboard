@@ -27,8 +27,10 @@ import java.io.File
 import java.io.FileOutputStream
 
 @SuppressLint("ClickableViewAccessibility", "SetTextI18n")
-class ClipboardView(context: Context) : LinearLayout(context) {
-    private val settings = SettingsManager(context)
+class ClipboardView(
+    context: Context,
+    settings: SettingsManager
+) : LinearLayout(context) {
 
     // 定義顏色變數以便後續使用
     private val bgColor = settings.backgroundColor

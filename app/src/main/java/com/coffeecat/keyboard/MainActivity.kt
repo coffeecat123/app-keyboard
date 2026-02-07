@@ -38,7 +38,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val settings = SettingsManager(this)
         setContent {
-            var testText by remember { mutableStateOf("") }
             val context = LocalContext.current
             val darkTheme = isSystemInDarkTheme()
             val scrollState = rememberScrollState() // 讓整個頁面可滾動
