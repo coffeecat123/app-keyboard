@@ -21,12 +21,13 @@ import androidx.core.graphics.toColorInt
 import androidx.core.view.inputmethod.EditorInfoCompat
 import androidx.core.view.inputmethod.InputConnectionCompat
 import androidx.core.view.inputmethod.InputContentInfoCompat
+import com.coffeecat.keyboard.data.BookmarkManager
+import com.coffeecat.keyboard.data.SettingsManager
+import com.coffeecat.keyboard.engine.BopomofoEngine
+import com.coffeecat.keyboard.engine.EnglishEngine
 import com.coffeecat.keyboard.providers.BopomofoProvider
 import com.coffeecat.keyboard.providers.EnglishProvider
 import com.coffeecat.keyboard.providers.LanguageProvider
-import com.coffeecat.keyboard.data.BookmarkManager
-import com.coffeecat.keyboard.engine.BopomofoEngine
-import com.coffeecat.keyboard.engine.EnglishEngine
 import com.coffeecat.keyboard.view.BookmarkView
 import com.coffeecat.keyboard.view.ClipboardView
 import com.coffeecat.keyboard.view.EmojiPickerView
@@ -44,6 +45,7 @@ import kotlinx.coroutines.withContext
 
 class CoffeeCatIME : InputMethodService() {
 
+    private lateinit var settingsManager: SettingsManager
     private lateinit var englishProvider: EnglishProvider
     private var searchJob: Job? = null
     private val imeScope = kotlinx.coroutines.MainScope()
@@ -72,6 +74,7 @@ class CoffeeCatIME : InputMethodService() {
         bookmarkManager = BookmarkManager(this)
         super.onCreate()
 
+        settingsManager = SettingsManager(this)
         // 初始化 Engine
         englishProvider = EnglishProvider(englishEngine)
 
@@ -673,7 +676,7 @@ class CoffeeCatIME : InputMethodService() {
         ic.sendKeyEvent(KeyEvent(0, 0, KeyEvent.ACTION_DOWN, keyCode, 0, KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON))
         ic.sendKeyEvent(KeyEvent(0, 0, KeyEvent.ACTION_UP, keyCode, 0, KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON))
     }
-    private fun sendCtrlVKeyEvent(keyCode: Int) {
+    private fun sendCtrlKeyEvent(keyCode: Int) {
         val ic = currentInputConnection ?: return
         ic.sendKeyEvent(KeyEvent(0,0,KeyEvent.ACTION_DOWN,keyCode,0,KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON))
         ic.sendKeyEvent(KeyEvent(0,0,KeyEvent.ACTION_UP,keyCode,0,KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON))
@@ -741,6 +744,7 @@ class CoffeeCatIME : InputMethodService() {
         isSelectionModeActive = false
         keyboardView.setSelectionMode(false)
         selectionAnchor = -1
+        keyboardView.applyStyles(settingsManager)
         switchToKeyboardView()
         info?.let { keyboardView.updateEnterKeyLabel(it.imeOptions) }
     }

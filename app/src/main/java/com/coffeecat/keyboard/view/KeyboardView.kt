@@ -21,12 +21,11 @@ import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.PopupWindow
 import android.widget.TextView
-import androidx.annotation.AttrRes
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
-import com.google.android.material.R as MaterialR
-import com.coffeecat.keyboard.data.KeyboardLayouts
 import com.coffeecat.keyboard.R
+import com.coffeecat.keyboard.data.KeyboardLayouts
+import com.coffeecat.keyboard.data.SettingsManager
 
 enum class KeyType {
     TEXT, FUNCTION, ACTION, TOOLBAR,SIGN,SPACER
@@ -94,6 +93,11 @@ class KeyboardView @JvmOverloads constructor(
     var onAction: ((KeyAction) -> Unit)? = null
     var currentMode = KeyboardMode.ALPHABET
 
+    private var backgroundBitmap: android.graphics.Bitmap? = null
+    private var backgroundImageAlpha: Float = 1.0f
+    private var userShowButton = true // 對應你的 showButton
+    private var userShowOutline = true // 對應你的 showButtonOutline
+    private var userShowText=true
     var baseLanguageMode = KeyboardMode.ALPHABET
     private var isPredictionEnabled = true // 預設開啟單字預測
     private var cachedBgColor = 0
@@ -246,8 +250,8 @@ class KeyboardView @JvmOverloads constructor(
         var isCommitted: Boolean = false
     )
     init {
+        applyStyles(SettingsManager(context))
         setMode(baseLanguageMode)
-        refreshColors()
         iconSizePx = dpToPx(24f).toInt()
 
         // 初始化 PopupWindow
@@ -260,23 +264,58 @@ class KeyboardView @JvmOverloads constructor(
         }
         loadLayout()
     }
-    private fun refreshColors() {
-        cachedBgColor = getThemeColor(MaterialR.attr.colorSurfaceVariant)
-        cachedKeyColor = getThemeColor(MaterialR.attr.colorSurface)
-        cachedTextColor = getThemeColor(MaterialR.attr.colorOnSurface)
-        cachedAccentColor = getThemeColor(MaterialR.attr.colorPrimaryContainer)
-        cachedPressedMaskColor = ColorUtils.setAlphaComponent(cachedTextColor, 30)
-        cachedFunctionalKeyColor = ColorUtils.blendARGB(cachedBgColor, cachedKeyColor, 0.3f)
-        cachedFunctionalTextColor = ColorUtils.setAlphaComponent(cachedTextColor, 200)
-        cachedToolbarColor = ColorUtils.setAlphaComponent(cachedTextColor, 30)
+    fun applyStyles(settings: SettingsManager) {
+        // 1. 同步基礎設定
+        userShowOutline = settings.showOutline
+        // 假設你在 SettingsManager 也有存這個，如果沒有就先用預設
+        userShowButton = settings.showButton
+        userShowText = settings.showText
+        cachedAccentColor = settings.accentColor
+        cachedKeyColor = settings.keyColor
 
+        cachedBgColor = settings.backgroundColor
+        cachedTextColor = settings.textColor
+
+        cachedToolbarColor = settings.toolbarColor
+        cachedFunctionalKeyColor = settings.functionKeyColor
+
+        cachedFunctionalTextColor = settings.functionTextColor
+
+        cachedPressedMaskColor = ColorUtils.setAlphaComponent(cachedTextColor, 30)
+
+
+        backgroundImageAlpha = settings.backgroundImageAlpha
+        val path = settings.backgroundImagePath
+
+        backgroundBitmap = if (path != null) {
+            try {
+                // 建議：實際開發中可加入圖片縮放(InSampleSize)優化記憶體
+                android.graphics.BitmapFactory.decodeFile(path)
+            } catch (e: Exception) {
+                null
+            }
+        } else {
+            null
+        }
+        // 2. 更新字體
+        val userTypeface = settings.getTypeface()
+        textPaint.typeface = userTypeface
+        textPaintSIGN.typeface = Typeface.create(userTypeface, Typeface.BOLD)
+
+
+        // 氣泡預覽顏色同步
+        updatePreviewStyles()
+
+        invalidate()
+    }
+    private fun updatePreviewStyles() {
         val previewBgColor = ColorUtils.blendARGB(cachedKeyColor, Color.GRAY, 0.4f)
         val previewTextColor = if (ColorUtils.calculateLuminance(previewBgColor) > 0.5) Color.BLACK else Color.WHITE
 
         previewText.setTextColor(previewTextColor)
         (previewText.background as? GradientDrawable)?.apply {
             setColor(previewBgColor)
-            setStroke(2, ColorUtils.setAlphaComponent(previewTextColor,20))
+            setStroke(2, ColorUtils.setAlphaComponent(previewTextColor, 20))
         }
     }
     fun setMode(mode: KeyboardMode) {
@@ -314,11 +353,6 @@ class KeyboardView @JvmOverloads constructor(
 
     private fun dpToPx(dp: Float): Float = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, resources.displayMetrics)
 
-    private fun getThemeColor(@AttrRes attrRes: Int): Int {
-        val typedValue = TypedValue()
-        context.theme.resolveAttribute(attrRes, typedValue, true)
-        return typedValue.data
-    }
 
     fun updateEnterKeyLabel(imeOptions: Int) {
         val action = imeOptions and EditorInfo.IME_MASK_ACTION
@@ -443,7 +477,29 @@ class KeyboardView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         canvas.drawColor(cachedBgColor) // 使用緩存顏色
+        backgroundBitmap?.let { bitmap ->
+            paint.alpha = (backgroundImageAlpha * 255).toInt()
 
+            // 計算 CenterCrop 邏輯：將圖片等比例縮放以填滿 View 寬高
+            val viewWidth = width.toFloat()
+            val viewHeight = height.toFloat()
+            val bitmapWidth = bitmap.width.toFloat()
+            val bitmapHeight = bitmap.height.toFloat()
+
+            val scale = (viewWidth / bitmapWidth).coerceAtLeast(viewHeight / bitmapHeight)
+            val drawW = bitmapWidth * scale
+            val drawH = bitmapHeight * scale
+            val left = (viewWidth - drawW) / 2f
+            val top = 0f
+
+            // 建立目標矩形
+            val dstRect = RectF(left, top, left + drawW, top + drawH)
+
+            canvas.drawBitmap(bitmap, null, dstRect, paint)
+
+            // 恢復 paint 的 alpha 供後續繪製使用
+            paint.alpha = 255
+        }
         paint.color = cachedToolbarColor
         val toolbarHeight = dpToPx(toolbarHeightDp)
         canvas.drawRect(0f, 0f, width.toFloat(), toolbarHeight, paint)
@@ -458,6 +514,7 @@ class KeyboardView @JvmOverloads constructor(
             // 繪製按鍵背景 (只有非 TOOLBAR 的按鍵才有獨立背景框)
             if(key.type != KeyType.SIGN){
                 if (key.type != KeyType.TOOLBAR) {
+                    paint.style = Paint.Style.FILL // 預設填充
                     paint.color = when {
                         key.type == KeyType.ACTION -> cachedAccentColor
                         key.code == KeyboardCodes.SHIFT && shiftState != ShiftState.UNSHIFTED -> cachedAccentColor
@@ -467,6 +524,15 @@ class KeyboardView @JvmOverloads constructor(
                     }
                     if(key.type != KeyType.TEXT) {
                         canvas.drawRoundRect(key.rect, 12f, 12f, paint)
+                    }else if(userShowButton){
+                        canvas.drawRoundRect(key.rect, 12f, 12f, paint)
+                    }
+                    if (userShowOutline) {
+                        paint.style = Paint.Style.STROKE
+                        paint.strokeWidth = dpToPx(1f)
+                        paint.color = ColorUtils.setAlphaComponent(cachedTextColor, 40) // 淡淡的外框
+                        canvas.drawRoundRect(key.rect, 12f, 12f, paint)
+                        paint.style = Paint.Style.FILL // 設回填充模式供下次使用
                     }
                     if (isKeyPressed(key)) {
                         paint.color = cachedPressedMaskColor
@@ -505,6 +571,9 @@ class KeyboardView @JvmOverloads constructor(
                     textPaintSIGN.color = cachedTextColor
                     textPaintSIGN.textSize = dpToPx(24f)
                     canvas.drawText(displayLabel, key.rect.left, centerY, textPaintSIGN)
+                }else if(key.type== KeyType.TEXT){
+                    if(userShowText||currentMode!=baseLanguageMode)
+                        canvas.drawText(displayLabel, centerX, centerY, textPaint)
                 }else{
                     canvas.drawText(displayLabel, centerX, centerY, textPaint)
                 }
@@ -749,7 +818,6 @@ class KeyboardView @JvmOverloads constructor(
     }
     override fun onConfigurationChanged(newConfig: Configuration?) {
         super.onConfigurationChanged(newConfig)
-        refreshColors()
         invalidate()
     }
     private fun stopRepeat() {
@@ -767,6 +835,8 @@ class KeyboardView @JvmOverloads constructor(
         stopRepeat()
         repeatHandler.removeCallbacksAndMessages(null) // 清空所有待執行任務
         previewPopup?.dismiss()
+        backgroundBitmap?.recycle()
+        backgroundBitmap = null
         super.onDetachedFromWindow()
     }
     override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
